@@ -1,0 +1,204 @@
+---
+title: "US COVID-19 Cases,Trend and Heat Map Analysis by states"
+author: "Chitra G"
+date: "2024-05-29"
+output:
+  pdf_document: default
+  html_document: default
+editor_options: 
+  chunk_output_type: console
+---
+```{r setup, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+#install all the below packages using install.package(pakage-name)
+library(tidyverse)
+library(readr)
+library(lubridate)
+library(ggplot2)
+library(dplyr)
+library(viridis)
+```
+**Source of COVID Data**
+
+The COVID-19 dataset used in this analysis is sourced from the Johns Hopkins University Center for Systems Science and Engineering (JHU CSSE) repository. This repository provides comprehensive and up-to-date information on COVID-19 cases and deaths globally and in the United States.
+
+For this analysis, we specifically used the following CSV files from the JHU CSSE GitHub repository:
+- "time_series_covid19_confirmed_US.csv"
+- "time_series_covid19_confirmed_global.csv"
+- "time_series_covid19_deaths_US.csv"
+- "time_series_covid19_deaths_global.csv"
+
+
+
+
+
+```{r}
+# URLs to the COVID-19 data files
+url_in <- "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
+file_names <- c("time_series_covid19_confirmed_global.csv",
+                "time_series_covid19_deaths_global.csv",
+                "time_series_covid19_confirmed_US.csv",
+                "time_series_covid19_deaths_US.csv")
+
+urls <- str_c(url_in, file_names)
+
+# Read the data files
+global_cases <- read_csv(urls[1])
+global_deaths <- read_csv(urls[2])
+US_cases <- read_csv(urls[3])
+US_deaths <- read_csv(urls[4])
+
+# View the structure of the US cases data
+#str(US_cases)
+#str(US_deaths)
+
+# Data cleaning and transformation for US cases
+US_cases_long <- US_cases %>%
+  pivot_longer(cols = -c(UID, iso2, iso3, code3, FIPS, Admin2, Province_State, Country_Region, Lat, Long_, Combined_Key), 
+               names_to = "date", 
+               values_to = "cases") %>%
+  mutate(date = mdy(date))
+
+# Data cleaning and transformation for US deaths
+US_deaths_long <- US_deaths %>%
+  pivot_longer(cols = -c(UID, iso2, iso3, code3, FIPS, Admin2, Province_State, Country_Region, Lat, Long_, Combined_Key, Population), 
+               names_to = "date", 
+               values_to = "deaths") %>%
+  mutate(date = mdy(date))
+
+
+# Combine cases and deaths data
+US_data <- US_cases_long %>%
+  left_join(US_deaths_long, by = c("UID", "iso2", "iso3", "code3", "FIPS", "Admin2", "Province_State", "Country_Region", "Lat", "Long_", "Combined_Key", "date"))
+str(US_data)
+
+
+
+# Identify states with the highest number of cases
+US_state_cases <- US_data %>%
+  group_by(Province_State) %>%
+  summarize(total_cases = sum(cases, na.rm = TRUE), total_deaths = sum(deaths, na.rm = TRUE)) %>%
+  arrange(desc(total_cases))
+
+# View the states with the highest number of cases
+head(US_state_cases)
+```
+** Note California leads the covid cases**
+** Closely followed by Texas and Florida**
+```{r}
+# Visualize total cases by state
+US_state_cases %>%
+  ggplot(aes(x = reorder(`Province_State`, total_cases), y = total_cases)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "Total COVID-19 Cases by State", x = "State", y = "Total Cases") +
+  theme_minimal()
+```
+** Note California leads the Death cases  **
+** Closely followed by Texas and New York**
+** The deaths are consistent with number of cases too.**
+```{r}  
+# Visualize total deaths by state
+US_state_cases %>%
+  ggplot(aes(x = reorder(Province_State, total_deaths), y = total_deaths)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "Total COVID-19 Deaths by State", x = "State", y = "Total Deaths") +
+  theme_minimal()
+
+# Trend analysis for COVID-19 cases and deaths over time
+
+# Filter data for a specific state (e.g., California)
+#Replace state_name with any state that you want to analyse
+state_name <- "California"
+
+state_data <- US_data %>%
+  filter(Province_State == state_name)
+
+# Plot trend of cases over time
+ggplot(state_data, aes(x = date, y = cases)) +
+  geom_line(color = "blue") +
+  labs(title = paste("Trend of COVID-19 Cases in", state_name),
+       x = "Date",
+       y = "Cases") +
+  theme_minimal()
+
+# Plot trend of deaths over time
+ggplot(state_data, aes(x = date, y = deaths)) +
+  geom_line(color = "red") +
+  labs(title = paste("Trend of COVID-19 Deaths in", state_name),
+       x = "Date",
+       y = "Deaths") +
+  theme_minimal()
+
+state_name <- "American Samoa"
+
+state_data <- US_data %>%
+  filter(Province_State == state_name)
+
+# Plot trend of cases over time
+ggplot(state_data, aes(x = date, y = cases)) +
+  geom_line(color = "blue") +
+  labs(title = paste("Trend of COVID-19 Cases in", state_name),
+       x = "Date",
+       y = "Cases") +
+  theme_minimal()
+
+# Plot trend of deaths over time
+ggplot(state_data, aes(x = date, y = deaths)) +
+  geom_line(color = "red") +
+  labs(title = paste("Trend of COVID-19 Deaths in", state_name),
+       x = "Date",
+       y = "Deaths") +
+  theme_minimal()
+
+# Prepare data for heat map
+state_cases <- US_data %>%
+  group_by(Province_State) %>%
+  summarise(total_cases = sum(cases, na.rm = TRUE)) %>%
+  arrange(desc(total_cases))
+
+# Create a data frame for the heat map
+heat_map_data <- data.frame(state = state_cases$Province_State, total_cases = state_cases$total_cases)
+
+# Plot heat map
+ggplot(heat_map_data, aes(x = reorder(state, total_cases), y = 1, fill = total_cases)) +
+  geom_tile(color = "white") +
+  scale_fill_viridis_c(option = "C") +
+  labs(title = "Heat Map of COVID-19 Cases by State",
+       x = "State",
+       y = "",
+       fill = "Total Cases") +
+  theme_minimal() +
+  theme(axis.text.y = element_blank(),  # Remove y-axis labels
+        axis.ticks.y = element_blank(), # Remove y-axis ticks
+        axis.text.x = element_text(angle = 90, hjust = 1)) # Rotate x-axis labels for better readability
+
+
+# Summarize the data, This is the model
+summary(US_data)
+
+```
+**Conclusion: The Deaths due to covid is more in states where the cases are more.**
+**The summary statistics reveal that the dataset contains a substantial amount of data, with over 3.8 million records. The cases variable ranges from negative values to over 3.7 million, indicating the presence of both decreases and increases in reported cases. Similarly, the deaths variable ranges from negative values to over 35,000, reflecting variations in reported deaths.**
+
+**The mean values for cases, Population, and deaths are 14,088, 99,604, and 186.9 respectively, suggesting relatively high average numbers of cases and deaths across the dataset. The presence of negative values in cases and deaths may require further investigation to understand the data quality and integrity.**
+
+**Additionally, the presence of NA values in some columns, such as FIPS, indicates potential missing or incomplete data that may need to be addressed during analysis.**
+
+**Overall, the dataset provides valuable insights into the spread and impact of COVID-19 in the United States, but further exploration and analysis are warranted to fully understand the dynamics and patterns within the data.**
+
+- **Bias identification**
+  - *Testing Bias: Differences in who gets tested for COVID-19 can affect the number of reported cases. For example, areas with more testing may find more cases, while areas with limited testing may have fewer reported cases.*
+
+  - *Reporting Bias: How and when COVID-19 cases are reported can vary, leading to inconsistencies. Delays or errors in reporting can make the data incomplete or inaccurate.*
+
+  - *Severity Bias: COVID-19 cases that are more severe, such as those requiring hospitalization, may be more likely to be reported. Mild cases or cases with no symptoms may go unreported, leading to an incomplete picture of the disease's spread.*
+
+  - *Population Density Bias: Areas with more people may have more cases reported simply because there are more people to test. This can make it seem like the disease is more widespread in densely populated areas.*
+
+  - *Access Bias: People with better access to healthcare may be more likely to get tested and have their cases reported. Areas with poorer access to healthcare may have fewer reported cases, even if the disease is present.*
+
+  - *Demographic Bias: Certain groups of people may be more or less likely to get tested or have their cases reported, leading to disparities in the data. This could be due to factors like race, income, or immigration status.*
+
+**These biases can affect the accuracy of COVID-19 data and make it harder to understand the true extent of the pandemic. It's important to be aware of these biases when interpreting COVID-19 data and making decisions based on it.**

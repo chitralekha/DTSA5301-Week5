@@ -3,8 +3,8 @@ title: "NYPD_Shooting"
 author: "Chitra G"
 date: "2024-05-28"
 output:
-  pdf_document: default
   html_document: default
+  pdf_document: default
 editor_options:
   chunk_output_type: console
 ---
