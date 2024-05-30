@@ -1,0 +1,163 @@
+---
+title: "NYPD_Shooting"
+author: "Chitra G"
+date: "2024-05-28"
+output:
+  pdf_document: default
+  html_document: default
+editor_options:
+  chunk_output_type: console
+---
+```{r setup, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(readr)
+library(lubridate)
+library(ggplot2)
+
+# Define the URL for the data
+url_in <- "https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD"
+
+# Read the data from the URL
+shoot_in <- read_csv(url_in)
+
+# Display the specification of all columns
+spec(shoot_in)
+
+# Renaming columns for better readability
+shoot_in <- shoot_in %>%
+  rename(
+    Incident_Key = `INCIDENT_KEY`,
+    Occurrence_Date = `OCCUR_DATE`,
+    Borough = `BORO`,
+    Precinct = `PRECINCT`,
+    Jurisdiction_Code = `JURISDICTION_CODE`,
+    Victim_Age_Group = `VIC_AGE_GROUP`,
+    Victim_Sex = `VIC_SEX`,
+    Victim_Race = `VIC_RACE`
+  )
+
+# Convert date columns to Date type
+shoot_in <- shoot_in %>%
+  mutate(Occurrence_Date = as.Date(Occurrence_Date, format = "%m/%d/%Y"))
+
+# Select all columns except Latitude and Longitude
+shoot_in <- shoot_in %>%
+  select(-Latitude, -Longitude)
+
+# Remove rows with any missing values
+shoot_in <- shoot_in %>%
+  drop_na()
+
+# Display the first few rows of the tidied dataset
+head(shoot_in)
+
+#Data Analysis and Visualization
+#Visualization 1: Incident Counts by Borough
+##We start by visualizing the number of incidents by borough.
+## Count the number of incidents by borough
+incidents_by_borough <- shoot_in %>%
+  count(Borough, sort = TRUE)
+
+## Display the count of incidents by borough
+incidents_by_borough
+
+
+# Visualization: Incidents by Borough
+ggplot(incidents_by_borough, aes(x = reorder(Borough, -n), y = n)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  labs(title = "Number of Incidents by Borough",
+       x = "Borough",
+       y = "Number of Incidents") +
+  theme_minimal()
+```
+
+Looking at this visualization, we can see that:
+
+- With 966 incidents, Brooklyn has the highest number of incidents among all boroughs.
+- Following closely, the Bronx reports 961 incidents.
+- Both Brooklyn and the Bronx experience a substantial number of shooting incidents, making them areas with higher levels of gun violence.
+
+On the other hand:
+
+- Staten Island reports the lowest number of shooting incidents among all boroughs, with only 64 incidents reported.
+- This suggests that Staten Island has relatively lower levels of gun violence compared to other boroughs in New York City.
+
+Questions arise:
+
+- Why are shooting incidents more common in Brooklyn and the Bronx?
+- Why is Staten Island more peaceful?
+```{r}
+
+# Visualization 2: Trend Over Time
+## Next, we visualize the trend of incidents over time.
+## Aggregate incidents by occurrence date
+incidents_by_date <- shoot_in %>%
+  group_by(Occurrence_Date) %>%
+  summarize(Incident_Count = n())
+
+# Check the structure of the incidents_by_date dataframe
+str(incidents_by_date)
+
+# Add a numeric date column for the model
+incidents_by_date <- incidents_by_date %>%
+  mutate(Date_Num = as.numeric(Occurrence_Date))
+
+# Check the structure to ensure Date_Num is created
+print(head(incidents_by_date))
+
+
+# Visualization: Incidents Over Time
+ggplot(incidents_by_date, aes(x = Occurrence_Date, y = Incident_Count)) +
+  geom_line(color = "steelblue") +
+  labs(title = "Trend of Incidents Over Time",
+       x = "Date",
+       y = "Number of Incidents") +
+  theme_minimal()
+```
+**Second visualization shows more spikes in 2022.**
+*Question to ponder why 2022 saw so much shooting incidents.*
+*Can we find the reason?*
+```{r}
+
+#Simple Linear Regression Model
+#We fit a simple linear regression model to predict #the number of incidents based on the date.
+# Add a numeric date column for the model
+shoot_in <- shoot_in %>%
+  mutate(Date_Num = as.numeric(Occurrence_Date))
+
+# Linear regression model
+model <- lm(Incident_Count ~ Date_Num, data = incidents_by_date)
+
+# Model summary
+summary(model)
+
+
+
+
+
+```
+**This summary is about a model that tried to predict how many incidents happen based on date**
+
+- **Coefficients**
+   - *The first number 63.84 is starting point*
+   - *The second number -0.00308 shows that as the date increases, the number of shooting incidents decreases little bit*
+- **Statistical Significance:** 
+   - *Both numbers are so unlikely to be zero that we can be confident they're real*
+   -*This means that the date does seem to have an effect on the number of incidents.*
+-**Model Performance:**
+  -*The model isn't perfect. It's like it can't explain much of what's going on. It only gets about 3.86% of the way there.*
+  -*This means that knowing the date doesn't tell us much about how many incidents there will be.*
+  -*But overall, the model does seem to be doing something useful, according to the tests it went through.*
+  
+- **Bias Identification:Data bias in NYPD shooting incident data means that the information we have might not give us the full picture. Here's how that might have happened:**:
+    - *Some Incidents Aren't Reported: Sometimes, not all shooting incidents get reported to the police. This could happen for various reasons, like people being afraid to come forward or not trusting the police.*
+    - *Certain Areas Get More Attention: Police might focus more on certain neighborhoods, which could make it seem like more incidents happen there, even if they happen elsewhere too*
+    - *How Data is Collected Matters: Sometimes, the way police collect data on shootings can lead to bias. For example, if they only count certain types of incidents or if their methods change over time, it can affect the numbers we see.*
+    - *Who Reports Matters: People might be more or less likely to report a shooting based on their trust in the police or fear of getting in trouble.*
+    - *Data Definitions Can Change: If the rules for what counts as a shooting change, it can make comparisons over time tricky.*
+
+
+**All these factors can make it challenging to understand the true extent and nature of shooting incidents in New York City. Recognizing and addressing these biases is important for making better decisions and policies to keep communities safe.**
+
+
